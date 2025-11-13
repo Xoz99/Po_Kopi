@@ -15,12 +15,11 @@
  */
 
 var sheetName = 'QRIS' // Default sheet
-var scriptProp = PropertiesService.getScriptProperties()
+var SPREADSHEET_ID = '1vo-s2biXePgPsMdbwzhI8cmyd1AihH_Embz8kRWYtzw' // Hardcode Spreadsheet ID
 
 function intialSetup() {
   var activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-  scriptProp.setProperty('key', activeSpreadsheet.getId())
-  Logger.log('Spreadsheet ID saved: ' + activeSpreadsheet.getId())
+  Logger.log('Current Spreadsheet ID: ' + activeSpreadsheet.getId())
 }
 
 function doPost(e) {
@@ -50,9 +49,10 @@ function doPost(e) {
     var currentSheetName = paymentMethod === 'bank' ? 'Bank Transfer' : 'QRIS'
 
     Logger.log('Using sheet: ' + currentSheetName)
+    Logger.log('Spreadsheet ID: ' + SPREADSHEET_ID)
 
     // Get spreadsheet dan sheet
-    var doc = SpreadsheetApp.openById(scriptProp.getProperty('key'))
+    var doc = SpreadsheetApp.openById(SPREADSHEET_ID)
     var sheet = doc.getSheetByName(currentSheetName)
 
     // Jika sheet tidak ada, buat baru
