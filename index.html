@@ -1185,8 +1185,8 @@
         function handleFileSelect() {
             const file = fileInput.files[0];
             if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    showError('Ukuran file terlalu besar (maksimal 5MB)');
+                if (file.size > 2 * 1024 * 1024) {
+                    showError('Ukuran file terlalu besar (maksimal 2MB)');
                     fileInput.value = '';
                     previewImage.style.display = 'none';
                     return;
@@ -1199,10 +1199,40 @@
                     return;
                 }
 
+                // Compress image sebelum convert ke base64
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    previewImage.src = e.target.result;
-                    previewImage.style.display = 'block';
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+
+                        // Resize jika perlu
+                        let width = img.width;
+                        let height = img.height;
+                        const maxSize = 1200;
+
+                        if (width > height && width > maxSize) {
+                            height = Math.round((height * maxSize) / width);
+                            width = maxSize;
+                        } else if (height > maxSize) {
+                            width = Math.round((width * maxSize) / height);
+                            height = maxSize;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Compress to JPEG (80% quality)
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        previewImage.src = compressedBase64;
+                        previewImage.style.display = 'block';
+
+                        // Store compressed base64 di global
+                        window.compressedImageBase64 = compressedBase64;
+                    };
+                    img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             }
@@ -1254,25 +1284,23 @@
             submitBtn.innerHTML = '<span class="loading-spinner"><span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span></span>Mengirim...';
 
             try {
-                // Convert image to base64
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const imageBase64 = e.target.result;
+                // Get payment method
+                const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
 
-                    // Get payment method
-                    const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+                // Prepare order data - use compressed image from handleFileSelect()
+                const orderData = {
+                    nama: nama,
+                    whatsapp: whatsapp,
+                    alamat: alamat,
+                    bundle: bundleRadio.value,
+                    items: [],
+                    timestamp: new Date().toLocaleString('id-ID'),
+                    paymentMethod: paymentMethod,
+                    imageBase64: window.compressedImageBase64 || ''
+                };
 
-                    // Prepare order data
-                    const orderData = {
-                        nama: nama,
-                        whatsapp: whatsapp,
-                        alamat: alamat,
-                        bundle: bundleRadio.value,
-                        items: [],
-                        timestamp: new Date().toLocaleString('id-ID'),
-                        paymentMethod: paymentMethod,
-                        imageBase64: imageBase64
-                    };
+                // Process the order
+                const processOrder = async () => {
 
                     // Get selected items
                     checkboxes.forEach(checkbox => {
@@ -1296,10 +1324,10 @@
                     });
                     orderData.total = total;
 
-                    // Send to Google Sheets - Using form-encoded for CORS compatibility
+                    // Send to Google Sheets - Don't send base64 via URLSearchParams
                     try {
-                        // Create FormData to send as form-encoded (better CORS support)
-                        const formData = new URLSearchParams();
+                        // Create FormData (not URLSearchParams) to handle large base64 strings
+                        const formData = new FormData();
                         formData.append('nama', orderData.nama);
                         formData.append('whatsapp', orderData.whatsapp);
                         formData.append('alamat', orderData.alamat);
@@ -1308,7 +1336,7 @@
                         formData.append('timestamp', orderData.timestamp);
                         formData.append('paymentMethod', orderData.paymentMethod);
                         formData.append('total', orderData.total);
-                        formData.append('imageBase64', orderData.imageBase64);
+                        formData.append('imageBase64', orderData.imageBase64 || ''); // Include base64 image
 
                         const response = await fetch('https://script.google.com/macros/s/AKfycbz9mGaFOfphXiGP4CgPBmfPwDPpzOewj1_RI3ijkCiBBqOzZ7YPk8p4YnA6pkD732fISA/exec', {
                             method: 'POST',
@@ -1337,7 +1365,9 @@
                         previewImage.style.display = 'none';
                     }
                 };
-                reader.readAsDataURL(receipt);
+
+                // Execute the order processing
+                await processOrder();
             } catch (error) {
                 showError('Terjadi kesalahan: ' + error.message);
             } finally {
