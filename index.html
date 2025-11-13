@@ -1298,9 +1298,8 @@
 
                     // Send to Google Sheets
                     try {
-                        // Script ID dari deployment
-                        const scriptId = 'AKfycbwa97rsMNVRgkW62J1r7ocXbpIt5ABr1NQHwcy4b9H1r7hU_uJErhmlb04jY8t077ybkA';
-                        const response = await fetch(`https://script.google.com/macros/s/AKfycbyXSp1pe6u8TwaRJjAYHM_Ct00lnNzRGmj18hyAz5hKR7dGImuGannYWCEnuacsfJps5w/exec`, {
+                        const scriptId = 'AKfycbztHkk5vIXq5RyJaAwF8IW2DzxgVEPUw2dE2MHpmrcS4prYSDB2UQX6a__-8e4NIKFSmQ';
+                        const response = await fetch(`https://script.google.com/macros/s/AKfycbztHkk5vIXq5RyJaAwF8IW2DzxgVEPUw2dE2MHpmrcS4prYSDB2UQX6a__-8e4NIKFSmQ/exec`, {
                             method: 'POST',
                             body: JSON.stringify(orderData)
                         });
