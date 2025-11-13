@@ -1298,20 +1298,29 @@
 
                     // Send to Google Sheets
                     try {
-                        const scriptId = 'AKfycbztHkk5vIXq5RyJaAwF8IW2DzxgVEPUw2dE2MHpmrcS4prYSDB2UQX6a__-8e4NIKFSmQ';
-                        const response = await fetch(`https://script.google.com/macros/s/AKfycbztHkk5vIXq5RyJaAwF8IW2DzxgVEPUw2dE2MHpmrcS4prYSDB2UQX6a__-8e4NIKFSmQ/exec`, {
+                        const response = await fetch('https://script.google.com/macros/s/AKfycbxi9-YE6L97oqrGJNAz4r-za1Y-eWWlAxZVsqyqJZ48p2mXRq87O-LDKx6YTts5sXcwmw/usercontent', {
                             method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
                             body: JSON.stringify(orderData)
                         });
 
-                        showSuccess('Pesanan berhasil dikirim! Cek WhatsApp Anda untuk konfirmasi.');
-                        document.getElementById('orderForm').reset();
-                        document.getElementById('orderSummary').style.display = 'none';
-                        previewImage.style.display = 'none';
-                        document.getElementById('locationStatus').textContent = '';
+                        const result = await response.json();
+
+                        if (result.status === 'success') {
+                            showSuccess('Pesanan berhasil dikirim! Cek WhatsApp Anda untuk konfirmasi.');
+                            document.getElementById('orderForm').reset();
+                            document.getElementById('orderSummary').style.display = 'none';
+                            previewImage.style.display = 'none';
+                            document.getElementById('locationStatus').textContent = '';
+                        } else {
+                            showError('Error: ' + (result.message || 'Gagal mengirim pesanan'));
+                        }
                     } catch (error) {
                         // Fallback: show data for manual entry
                         console.log('Order Data:', orderData);
+                        console.log('Fetch Error:', error);
                         showSuccess('Pesanan berhasil! Silakan hubungi admin untuk konfirmasi via WhatsApp.');
                         document.getElementById('orderForm').reset();
                         document.getElementById('orderSummary').style.display = 'none';

@@ -15,7 +15,7 @@
  */
 
 // ID Spreadsheet (ganti dengan ID Sheets Anda)
-const SPREADSHEET_ID = '1kohZXUmVki0k0ZDUD-CozmzxmFNENcA7F8Sgt74DBVM';
+const SPREADSHEET_ID = '1vo-s2biXePgPsMdbwzhI8cmyd1AihH_Embz8kRWYtzw';
 
 // Nama sheet untuk setiap payment method
 const SHEET_NAMES = {
