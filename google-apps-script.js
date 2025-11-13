@@ -2,232 +2,127 @@
  * Google Apps Script untuk Pre-Order SIP DEH
  *
  * SETUP INSTRUCTIONS:
- * 1. Buka Google Sheets: https://sheets.google.com
- * 2. Buat spreadsheet baru dengan nama "SIP DEH Pre-Orders"
- * 3. Rename sheet 1 menjadi "QRIS" dan buat sheet baru "Bank Transfer"
+ * 1. Buka Google Sheets Anda
+ * 2. Pastikan ada 2 sheet: "QRIS" dan "Bank Transfer"
+ * 3. Di sheet QRIS, buat header di row 1: timestamp | nama | whatsapp | alamat | bundle | items | total | paymentMethod | imageBase64 | status
  * 4. Buka Tools > Script Editor
- * 5. Copy paste semua kode di bawah ini
- * 6. Jalankan fungsi doPost() sekali
- * 7. Klik Deploy > New Deployment > Web app
+ * 5. Paste kode ini
+ * 6. Jalankan fungsi intialSetup() untuk auto-detect Spreadsheet ID
+ * 7. Deploy sebagai Web app (Deploy > New > Web app)
  * 8. Execute as: Your Account
  * 9. Who has access: Anyone
- * 10. Copy URL dan replace YOUR_SCRIPT_ID di HTML
+ * 10. Copy URL deployment ke HTML
  */
 
-// ID Spreadsheet (ganti dengan ID Sheets Anda)
-const SPREADSHEET_ID = '1vo-s2biXePgPsMdbwzhI8cmyd1AihH_Embz8kRWYtzw';
+var sheetName = 'QRIS' // Default sheet
+var scriptProp = PropertiesService.getScriptProperties()
 
-// Nama sheet untuk setiap payment method
-const SHEET_NAMES = {
-  'qris': 'QRIS',
-  'bank': 'Bank Transfer'
-};
-
-// Columns definition
-const COLUMNS = {
-  'qris': [
-    'Timestamp',
-    'Nama',
-    'WhatsApp',
-    'Alamat',
-    'Paket',
-    'Items',
-    'Total Harga',
-    'Bukti Pembayaran Link',
-    'Status'
-  ],
-  'bank': [
-    'Timestamp',
-    'Nama',
-    'WhatsApp',
-    'Alamat',
-    'Paket',
-    'Items',
-    'Total Harga',
-    'Bukti Pembayaran Link',
-    'Status'
-  ]
-};
+function intialSetup() {
+  var activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+  scriptProp.setProperty('key', activeSpreadsheet.getId())
+  Logger.log('Spreadsheet ID saved: ' + activeSpreadsheet.getId())
+}
 
 function doPost(e) {
-  try {
-    // Parse JSON dari request
-    const data = JSON.parse(e.postData.contents);
+  var lock = LockService.getScriptLock()
+  lock.tryLock(10000)
 
-    // Get payment method
-    const paymentMethod = data.paymentMethod || 'qris';
-    const sheetName = SHEET_NAMES[paymentMethod];
+  try {
+    // Parse data dari request (form-encoded atau JSON)
+    var data = {}
+
+    if (e.postData && e.postData.contents) {
+      try {
+        // Coba parse sebagai JSON
+        data = JSON.parse(e.postData.contents)
+      } catch(err) {
+        // Fallback ke parameter
+        data = e.parameter
+      }
+    } else {
+      data = e.parameter
+    }
+
+    Logger.log('Received data: ' + JSON.stringify(data))
+
+    // Determine sheet name based on payment method
+    var paymentMethod = data.paymentMethod || 'qris'
+    var currentSheetName = paymentMethod === 'bank' ? 'Bank Transfer' : 'QRIS'
+
+    Logger.log('Using sheet: ' + currentSheetName)
 
     // Get spreadsheet dan sheet
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(sheetName);
+    var doc = SpreadsheetApp.openById(scriptProp.getProperty('key'))
+    var sheet = doc.getSheetByName(currentSheetName)
 
-    // Create sheet jika belum ada
+    // Jika sheet tidak ada, buat baru
     if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      // Add headers
-      sheet.appendRow(COLUMNS[paymentMethod]);
+      sheet = doc.insertSheet(currentSheetName)
+      // Add headers otomatis
+      sheet.appendRow(['timestamp', 'nama', 'whatsapp', 'alamat', 'bundle', 'items', 'total', 'paymentMethod', 'imageBase64', 'status'])
     }
 
-    // Process image dan save to Drive
-    let receiptLink = '';
-    if (data.imageBase64) {
-      receiptLink = saveImageToDrive(data.imageBase64, data.nama, paymentMethod);
-    }
+    // Get headers
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    var nextRow = sheet.getLastRow() + 1
 
-    // Format items
-    const itemsList = data.items.map(item => {
-      return `${formatItemName(item.item)} x${item.quantity} (Rp ${item.price.toLocaleString('id-ID')})`;
-    }).join(', ');
+    Logger.log('Headers: ' + JSON.stringify(headers))
+    Logger.log('Next row: ' + nextRow)
 
-    // Format bundle
-    const bundleText = data.bundle && data.bundle !== 'none'
-      ? (data.bundle === 'nongki' ? 'Paket Nongki (18K)' : 'Paket Millo Ceria (23K)')
-      : 'Tanpa Paket';
+    // Map data ke kolom berdasarkan header
+    var newRow = headers.map(function(header) {
+      if (header === 'timestamp') {
+        return new Date()
+      } else if (header === 'status') {
+        return 'Pending'
+      } else if (header === 'items') {
+        // Format items jika ada
+        try {
+          var items = typeof data.items === 'string' ? JSON.parse(data.items) : data.items
+          if (Array.isArray(items) && items.length > 0) {
+            return items.map(function(item) {
+              return item.item + ' x' + item.quantity
+            }).join(', ')
+          }
+          return '-'
+        } catch(e) {
+          Logger.log('Items parse error: ' + e)
+          return data[header] || '-'
+        }
+      } else {
+        return data[header] || ''
+      }
+    })
 
-    // Add row to sheet
-    const newRow = [
-      data.timestamp,
-      data.nama,
-      data.whatsapp,
-      data.alamat,
-      bundleText,
-      itemsList || '-',
-      `Rp ${data.total.toLocaleString('id-ID')}`,
-      receiptLink,
-      'Pending'
-    ];
+    Logger.log('New row data: ' + JSON.stringify(newRow))
 
-    sheet.appendRow(newRow);
+    // Append row ke sheet
+    sheet.getRange(nextRow, 1, 1, newRow.length).setValues([newRow])
 
-    // Send WhatsApp notification (optional - bisa diisi di config)
-    // sendWhatsAppNotification(data);
+    Logger.log('Data saved to sheet: ' + currentSheetName + ' at row ' + nextRow)
 
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'success',
-      message: 'Pesanan berhasil disimpan',
-      paymentMethod: paymentMethod
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        'result': 'success',
+        'row': nextRow,
+        'message': 'Pesanan berhasil disimpan',
+        'status': 'success'
+      }))
+      .setMimeType(ContentService.MimeType.JSON)
 
   } catch (error) {
-    Logger.log('Error: ' + error);
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'error',
-      message: error.toString()
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+    Logger.log('Error: ' + error)
+    Logger.log('Stack: ' + error.stack)
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        'result': 'error',
+        'error': error.toString(),
+        'status': 'error',
+        'message': error.toString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON)
   }
-}
-
-/**
- * Save image dari base64 ke Google Drive
- */
-function saveImageToDrive(base64String, customerName, paymentMethod) {
-  try {
-    // Create folder jika belum ada
-    let folder = DriveApp.getFoldersByName('SIP DEH - Bukti Pembayaran').hasNext()
-      ? DriveApp.getFoldersByName('SIP DEH - Bukti Pembayaran').next()
-      : DriveApp.createFolder('SIP DEH - Bukti Pembayaran');
-
-    // Create subfolder per payment method
-    let subFolder = folder.getFoldersByName(paymentMethod.toUpperCase()).hasNext()
-      ? folder.getFoldersByName(paymentMethod.toUpperCase()).next()
-      : folder.createFolder(paymentMethod.toUpperCase());
-
-    // Convert base64 ke blob
-    const base64Data = base64String.split(',')[1];
-    const mimeType = 'image/jpeg';
-    const imageBlob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType);
-
-    // Create filename dengan timestamp
-    const filename = `${customerName}_${new Date().getTime()}.jpg`;
-
-    // Save file to folder
-    const file = subFolder.createFile(imageBlob);
-    file.setName(filename);
-
-    return file.getUrl();
-
-  } catch (error) {
-    Logger.log('Image save error: ' + error);
-    return '';
+  finally {
+    lock.releaseLock()
   }
-}
-
-/**
- * Format item name dari ID
- */
-function formatItemName(itemId) {
-  const itemNames = {
-    'iced-cappuccino': 'Iced Cappuccino',
-    'iced-latte': 'Iced Latte',
-    'millo-dino': 'Millo Dino',
-    'millo-oreo': 'Millo Oreo'
-  };
-  return itemNames[itemId] || itemId;
-}
-
-/**
- * OPTIONAL: Send notification ke WhatsApp
- * Butuh: Twilio account atau WhatsApp Business API
- */
-function sendWhatsAppNotification(data) {
-  // Contoh konfigurasi Twilio
-  /*
-  const twilioAccountSid = 'YOUR_ACCOUNT_SID';
-  const twilioAuthToken = 'YOUR_AUTH_TOKEN';
-  const fromNumber = 'whatsapp:+1234567890'; // Twilio sandbox number
-  const toNumber = `whatsapp:+${data.whatsapp}`;
-
-  const message = `Halo ${data.nama}!\n\nPesanan pre-order Anda telah diterima.\nTotal: Rp ${data.total.toLocaleString('id-ID')}\n\nTerima kasih!`;
-
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages`;
-
-  const payload = {
-    From: fromNumber,
-    To: toNumber,
-    Body: message
-  };
-
-  const options = {
-    method: 'post',
-    headers: {
-      Authorization: 'Basic ' + Utilities.base64Encode(twilioAccountSid + ':' + twilioAuthToken)
-    },
-    payload: payload,
-    muteHttpExceptions: true
-  };
-
-  UrlFetchApp.fetch(url, options);
-  */
-}
-
-/**
- * Test function - jalankan ini untuk test
- */
-function testDoPost() {
-  const testData = {
-    "nama": "John Doe",
-    "whatsapp": "6281234567890",
-    "alamat": "Jl. Test No. 123",
-    "bundle": "none",
-    "items": [
-      {"item": "iced-cappuccino", "quantity": 2, "price": 10000},
-      {"item": "millo-dino", "quantity": 1, "price": 12000}
-    ],
-    "timestamp": new Date().toLocaleString('id-ID'),
-    "paymentMethod": "qris",
-    "total": 32000,
-    "imageBase64": "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
-  };
-
-  const e = {
-    postData: {
-      contents: JSON.stringify(testData)
-    }
-  };
-
-  const result = doPost(e);
-  Logger.log(result.getContent());
 }

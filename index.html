@@ -1296,32 +1296,42 @@
                     });
                     orderData.total = total;
 
-                    // Send to Google Sheets
+                    // Send to Google Sheets - Using form-encoded for CORS compatibility
                     try {
-                        const response = await fetch('https://script.google.com/macros/s/AKfycbxi9-YE6L97oqrGJNAz4r-za1Y-eWWlAxZVsqyqJZ48p2mXRq87O-LDKx6YTts5sXcwmw/usercontent', {
+                        // Create FormData to send as form-encoded (better CORS support)
+                        const formData = new URLSearchParams();
+                        formData.append('nama', orderData.nama);
+                        formData.append('whatsapp', orderData.whatsapp);
+                        formData.append('alamat', orderData.alamat);
+                        formData.append('bundle', orderData.bundle);
+                        formData.append('items', JSON.stringify(orderData.items));
+                        formData.append('timestamp', orderData.timestamp);
+                        formData.append('paymentMethod', orderData.paymentMethod);
+                        formData.append('total', orderData.total);
+                        formData.append('imageBase64', orderData.imageBase64);
+
+                        const response = await fetch('https://script.google.com/macros/s/AKfycbyaKLvPb-0H1gLmxPHa4satwDE47KytfTtEicQ34od_VZgu-iwcLa5BPxgMJhLXmZY0ew/exec', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(orderData)
+                            body: formData
                         });
 
                         const result = await response.json();
+                        console.log('Response from Apps Script:', result);
 
-                        if (result.status === 'success') {
+                        if (result.status === 'success' || result.result === 'success') {
                             showSuccess('Pesanan berhasil dikirim! Cek WhatsApp Anda untuk konfirmasi.');
                             document.getElementById('orderForm').reset();
                             document.getElementById('orderSummary').style.display = 'none';
                             previewImage.style.display = 'none';
                             document.getElementById('locationStatus').textContent = '';
                         } else {
-                            showError('Error: ' + (result.message || 'Gagal mengirim pesanan'));
+                            showError('Error: ' + (result.message || result.error || 'Gagal mengirim pesanan'));
                         }
                     } catch (error) {
                         // Fallback: show data for manual entry
                         console.log('Order Data:', orderData);
                         console.log('Fetch Error:', error);
-                        showSuccess('Pesanan berhasil! Silakan hubungi admin untuk konfirmasi via WhatsApp.');
+                        showSuccess('Pesanan dikirim! Data: ' + JSON.stringify(orderData, null, 2));
                         document.getElementById('orderForm').reset();
                         document.getElementById('orderSummary').style.display = 'none';
                         previewImage.style.display = 'none';
