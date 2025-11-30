@@ -1358,8 +1358,7 @@
 
                         console.log('Payload imageBase64 length:', payload.imageBase64.length);
 
-                        const apiUrl = process.env.REACT_APP_API_URL || window.location.origin;
-                        const response = await fetch(`${apiUrl}/api/orders`, {
+                        const response = await fetch('/api/orders', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'

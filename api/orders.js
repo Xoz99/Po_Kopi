@@ -77,6 +77,12 @@ export default async function handler(req, res) {
     const ordersCollection = db.collection('orders');
 
     if (req.method === 'POST') {
+      // Parse body
+      let body = req.body;
+      if (typeof body === 'string') {
+        body = JSON.parse(body);
+      }
+
       // Create new order
       const {
         nama,
@@ -88,7 +94,7 @@ export default async function handler(req, res) {
         paymentMethod,
         imageBase64,
         total,
-      } = req.body;
+      } = body;
 
       let imageUrl = '';
       let imageStatus = 'no_image';
