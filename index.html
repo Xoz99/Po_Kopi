@@ -1185,8 +1185,8 @@
         function handleFileSelect() {
             const file = fileInput.files[0];
             if (file) {
-                if (file.size > 2 * 1024 * 1024) {
-                    showError('Ukuran file terlalu besar (maksimal 2MB)');
+                if (file.size > 5 * 1024 * 1024) {
+                    showError('Ukuran file terlalu besar (maksimal 5MB)');
                     fileInput.value = '';
                     previewImage.style.display = 'none';
                     return;
@@ -1199,7 +1199,7 @@
                     return;
                 }
 
-                // Compress image sebelum convert ke base64
+                // Compress image
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const img = new Image();
@@ -1207,10 +1207,10 @@
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
 
-                        // Resize jika perlu
+                        // Resize
                         let width = img.width;
                         let height = img.height;
-                        const maxSize = 1200;
+                        const maxSize = 800;
 
                         if (width > height && width > maxSize) {
                             height = Math.round((height * maxSize) / width);
@@ -1224,13 +1224,29 @@
                         canvas.height = height;
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        // Compress to JPEG (80% quality)
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        // Compress to base64
+                        let compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                        let quality = 0.6;
+                        let base64Size = compressedBase64.length;
+
+                        // Re-compress if still too big
+                        while (base64Size > 300 * 1024 && quality > 0.3) {
+                            quality -= 0.1;
+                            compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                            base64Size = compressedBase64.length;
+                        }
+
                         previewImage.src = compressedBase64;
                         previewImage.style.display = 'block';
 
-                        // Store compressed base64 di global
+                        if (base64Size > 400 * 1024) {
+                            showError(`Gambar terlalu besar (${Math.round(base64Size / 1024)}KB). Gunakan gambar yang lebih kecil.`);
+                            window.compressedImageBase64 = '';
+                            return;
+                        }
+
                         window.compressedImageBase64 = compressedBase64;
+                        console.log(`Image ready: ${Math.round(base64Size / 1024)}KB`);
                     };
                     img.src = e.target.result;
                 };
@@ -1324,30 +1340,41 @@
                     });
                     orderData.total = total;
 
-                    // Send to Google Sheets - Don't send base64 via URLSearchParams
+                    // Send to Google Sheets via JSON
                     try {
-                        // Create FormData (not URLSearchParams) to handle large base64 strings
-                        const formData = new FormData();
-                        formData.append('nama', orderData.nama);
-                        formData.append('whatsapp', orderData.whatsapp);
-                        formData.append('alamat', orderData.alamat);
-                        formData.append('bundle', orderData.bundle);
-                        formData.append('items', JSON.stringify(orderData.items));
-                        formData.append('timestamp', orderData.timestamp);
-                        formData.append('paymentMethod', orderData.paymentMethod);
-                        formData.append('total', orderData.total);
-                        formData.append('imageBase64', orderData.imageBase64 || ''); // Include base64 image
-
-                        const response = await fetch('https://script.google.com/macros/s/AKfycbz9mGaFOfphXiGP4CgPBmfPwDPpzOewj1_RI3ijkCiBBqOzZ7YPk8p4YnA6pkD732fISA/exec', {
+                        const response = await fetch('https://script.google.com/macros/s/AKfycby9rABgALnSFuJQf5Z9soh3cRg8zNiiixlL0jF9ikI-TP9atv6R8TrH-o0fkTIiU_3xoQ/exec', {
                             method: 'POST',
-                            body: formData
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                nama: nama,
+                                whatsapp: whatsapp,
+                                alamat: alamat,
+                                bundle: bundleRadio.value,
+                                items: JSON.stringify(orderData.items),
+                                timestamp: new Date().toLocaleString('id-ID'),
+                                paymentMethod: paymentMethod,
+                                total: orderData.total,
+                                imageBase64: window.compressedImageBase64 || ''
+                            })
                         });
 
                         const result = await response.json();
                         console.log('Response from Apps Script:', result);
+                        console.log('Image Status:', result.imageStatus);
+                        console.log('Image Link:', result.imageLink);
 
                         if (result.status === 'success' || result.result === 'success') {
-                            showSuccess('Pesanan berhasil dikirim! Cek WhatsApp Anda untuk konfirmasi.');
+                            let successMsg = 'Pesanan berhasil dikirim! Cek WhatsApp Anda untuk konfirmasi.';
+                            if (result.imageStatus === 'embedded') {
+                                successMsg += ' [Gambar sudah di-upload]';
+                            } else if (result.imageStatus && result.imageStatus !== 'no_image') {
+                                successMsg += ` [Status gambar: ${result.imageStatus}]`;
+                            } else {
+                                console.warn('Gambar tidak terkirim:', result.imageLink);
+                            }
+                            showSuccess(successMsg);
                             document.getElementById('orderForm').reset();
                             document.getElementById('orderSummary').style.display = 'none';
                             previewImage.style.display = 'none';
