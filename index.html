@@ -1340,24 +1340,31 @@
                     });
                     orderData.total = total;
 
-                    // Send to Google Sheets via JSON
+                    // Send to Google Sheets via JSON string
                     try {
-                        const response = await fetch('https://script.google.com/macros/s/AKfycby9rABgALnSFuJQf5Z9soh3cRg8zNiiixlL0jF9ikI-TP9atv6R8TrH-o0fkTIiU_3xoQ/exec', {
+                        console.log('Before submit - window.compressedImageBase64 length:', window.compressedImageBase64 ? window.compressedImageBase64.length : 0);
+
+                        const payload = {
+                            nama: nama,
+                            whatsapp: whatsapp,
+                            alamat: alamat,
+                            bundle: bundleRadio.value,
+                            items: JSON.stringify(orderData.items),
+                            timestamp: new Date().toLocaleString('id-ID'),
+                            paymentMethod: paymentMethod,
+                            total: orderData.total,
+                            imageBase64: window.compressedImageBase64 || ''
+                        };
+
+                        console.log('Payload imageBase64 length:', payload.imageBase64.length);
+
+                        const apiUrl = process.env.REACT_APP_API_URL || window.location.origin;
+                        const response = await fetch(`${apiUrl}/api/orders`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json'
                             },
-                            body: JSON.stringify({
-                                nama: nama,
-                                whatsapp: whatsapp,
-                                alamat: alamat,
-                                bundle: bundleRadio.value,
-                                items: JSON.stringify(orderData.items),
-                                timestamp: new Date().toLocaleString('id-ID'),
-                                paymentMethod: paymentMethod,
-                                total: orderData.total,
-                                imageBase64: window.compressedImageBase64 || ''
-                            })
+                            body: JSON.stringify(payload)
                         });
 
                         const result = await response.json();

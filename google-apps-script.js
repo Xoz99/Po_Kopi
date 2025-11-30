@@ -7,24 +7,33 @@ function doPost(e) {
   lock.tryLock(10000)
 
   try {
+    Logger.log('doPost called')
+
     var data = {}
 
-    // Parse JSON from POST body if Content-Type is application/json
-    if (e.postData && e.postData.contents) {
+    // Try to parse JSON from postData
+    if (e && e.postData && e.postData.contents) {
       try {
         data = JSON.parse(e.postData.contents)
-        Logger.log('Parsed JSON data successfully')
+        Logger.log('Parsed JSON from postData successfully')
       } catch(parseErr) {
-        Logger.log('JSON parse error: ' + parseErr.toString())
-        data = e.parameter || {}
+        Logger.log('Parse error: ' + parseErr.toString())
+        data = (e && e.parameter) ? e.parameter : {}
       }
     } else {
-      // Fallback to form parameters if no JSON body
-      data = e.parameter || {}
+      data = (e && e.parameter) ? e.parameter : {}
     }
 
-    Logger.log('Data received - imageBase64 length: ' + (data.imageBase64 ? data.imageBase64.length : 0))
+    Logger.log('=== DEBUG ===')
+    Logger.log('Data type: ' + typeof data)
+    Logger.log('Data keys: ' + Object.keys(data).join(', '))
+    Logger.log('nama: ' + (data.nama || 'EMPTY'))
+    Logger.log('imageBase64 type: ' + typeof data.imageBase64)
+    Logger.log('imageBase64 length: ' + (data.imageBase64 ? data.imageBase64.length : 0))
     Logger.log('REQUEST: imageBase64 exists: ' + (data.imageBase64 ? 'YES' : 'NO'))
+    if (data.imageBase64 && data.imageBase64.length > 0) {
+      Logger.log('imageBase64 first 100 chars: ' + data.imageBase64.substring(0, 100))
+    }
 
     var paymentMethod = data.paymentMethod || 'qris'
     var currentSheetName = paymentMethod === 'bank' ? 'Bank Transfer' : 'QRIS'
@@ -165,4 +174,8 @@ function saveBase64ImageToDrive(base64String, customerName, paymentMethod) {
     Logger.log('Error in saveBase64ImageToDrive: ' + error.toString())
     throw error
   }
+}
+
+function doOptions(e) {
+  return HtmlService.createHtmlOutput()
 }
