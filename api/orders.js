@@ -77,11 +77,23 @@ export default async function handler(req, res) {
     const ordersCollection = db.collection('orders');
 
     if (req.method === 'POST') {
-      // Parse body
+      // Parse body - handle both object and string
       let body = req.body;
       if (typeof body === 'string') {
-        body = JSON.parse(body);
+        try {
+          body = JSON.parse(body);
+        } catch (e) {
+          console.error('JSON parse error:', e);
+          return res.status(400).json({
+            status: 'error',
+            message: 'Invalid JSON body',
+          });
+        }
       }
+
+      console.log('Request body keys:', Object.keys(body));
+      console.log('imageBase64 type:', typeof body.imageBase64);
+      console.log('imageBase64 length:', body.imageBase64 ? body.imageBase64.length : 'undefined');
 
       // Create new order
       const {
@@ -100,21 +112,25 @@ export default async function handler(req, res) {
       let imageStatus = 'no_image';
 
       // Upload image jika ada
-      if (imageBase64 && imageBase64.length > 100) {
+      if (imageBase64 && typeof imageBase64 === 'string' && imageBase64.length > 100) {
         try {
           // Remove data URL prefix if exists
           let base64Data = imageBase64;
-          if (imageBase64.includes(',')) {
-            base64Data = imageBase64.split(',')[1];
+          if (base64Data && base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1];
           }
 
-          imageUrl = await uploadImageToCloudinary(base64Data);
-          imageStatus = 'uploaded';
+          if (base64Data && base64Data.length > 50) {
+            imageUrl = await uploadImageToCloudinary(base64Data);
+            imageStatus = 'uploaded';
+          }
         } catch (error) {
           console.error('Image upload error:', error);
           imageStatus = 'error';
           imageUrl = '';
         }
+      } else {
+        console.log('No image provided or invalid imageBase64');
       }
 
       // Parse items
